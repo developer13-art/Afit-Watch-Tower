@@ -1,6 +1,6 @@
 # The real environment file holds a database password and the session-signing secret.
 .env
-
+nodemodules/
 # Runtime state: the credential key ring, the SQLite demo database and the evidence
 # directory. Everything under var/ holds either a key or a frame, so none of it belongs
 # in an export. The scratch files already there (var/*.key hold real key material, and

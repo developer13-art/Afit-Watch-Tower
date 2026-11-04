@@ -389,6 +389,63 @@ Two things make that acceptable for a pilot, and one decision is still owed:
 The same checklist applies to any PaaS. What you cannot substitute is the outbound-only rule for
 the AFIT side: no hosted platform can host the camera connections, and none should try.
 
+### 5.7 The free layout: one web service, everything in it
+
+Everything above assumes a paid plan, and not only for politeness. Render's free compute covers
+**web services**, Key Value and Postgres - a background worker is paid, a persistent disk is paid,
+and the secret files §5.3 relies on are paid. Applying `render.yaml` asks for a subscription too -
+reported from the dashboard when this was written, not from the documentation, and either way the
+three-service shape cannot be free.
+A pilot that costs nothing is therefore a different shape, not a smaller version of the same one:
+**one free web service, started without `--no-worker`**, so the API and both jobs run in the one
+process the code has always supported for a single host.
+
+Build command `pip install -r requirements-cloud.txt`; start command, all one line:
+
+```
+mkdir -p /tmp/watchtower && printf '%s' "$CLOUD_SECRET_KEY_RING_B64" | base64 -d \
+  > /tmp/watchtower/cloud.key && chmod 600 /tmp/watchtower/cloud.key && \
+  exec python -m watchtower.cloud --log-level INFO serve --host 0.0.0.0 --trusted-proxy '*'
+```
+
+The `exec` matters: without it Python is a child of the shell and Render's stop signal kills the
+shell and leaves the server. No `--port`, because the platform's `PORT` is what the service binds
+(`cloud/cli.py` `_resolve_port`). The environment is §5's list with three changes:
+
+- `CLOUD_SECRET_KEY_PATH=/tmp/watchtower/cloud.key` and `CLOUD_EVIDENCE_DIR=/tmp/watchtower/evidence`
+  - `/tmp` because nothing else on the free tier survives, and the parent directory is created above.
+- `CLOUD_SECRET_KEY_RING_B64` holds the ring itself, base64 of `var\cloud.key` - the existing file,
+  not a new one: `[IO.File]::ReadAllBytes` in PowerShell, paste the single line into the dashboard.
+  A secret file would be better and is paid; this is why the bootstrap rewrites the file on every
+  boot instead of storing it anywhere.
+- `PYTHONPATH=src`, as always, or the start command fails with `No module named 'watchtower'`.
+
+When Firebase arrives, add `CLOUD_FIREBASE_PROJECT_ID`,
+`CLOUD_FIREBASE_SERVICE_ACCOUNT_FILE=/tmp/watchtower/firebase-service-account.json` and a second
+`printf '%s' "$CLOUD_FIREBASE_JSON_B64" | base64 -d > ...` clause in the same start command. A
+service-account JSON is a private key: putting it in the env panel is the weakest part of this
+layout, it is why the paid layout exists, and the panel should be visible only to people AFIT trusts.
+
+What the free tier gives up, stated because each one is silent:
+
+1. **It spins down after 15 minutes without inbound traffic.** A forwarded incident is inbound
+   traffic, so the usual path still works - the POST wakes the service and the in-process delivery
+   job runs while it is awake. A retry that was waiting on backoff does not get its second attempt
+   until something else wakes it.
+2. **Escalation only advances while the service is awake.** `CLOUD_ESCALATE_AFTER_SECONDS` is a
+   timer, and a sleeping process has no timers. This is the feature the paid `worker --jobs
+   escalation` service exists for, and on the free tier it is not reliable.
+3. **Relayed evidence disappears at every spin-down and redeploy**, because `/tmp` is not a disk.
+   The `evidence_assets` rows survive and the app keeps reporting the frames as still arriving,
+   which is the truth; the bytes are gone. Alerts still arrive with their text.
+4. **One instance, forever.** In-process jobs mean a second instance pages the same officer twice.
+   The free tier cannot scale anyway, but this is a rule, not a limitation.
+
+Upgrade to the paid layout in §5.1-§5.3 when either of two things becomes true: the escalation timer
+has to actually fire, or evidence has to be retrievable after a redeploy. Between now and then this
+runs real personnel logins, real incident data and real acknowledgement workflow at no cost - the
+first time a push is genuinely sent is still a Firebase question, not a billing one.
+
 ## 6. Monitoring host
 
 `docs/installation.md` through section 5, plus the forwarding lines:
