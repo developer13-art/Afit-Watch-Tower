@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * AFIT WATCH TOWER — personnel app base layer.
+ *
+ * Navy card language for a duty device: raised panels on a blue-lit gradient, colour
+ * reserved for meaning (severity, status, state), and 48px touch targets because this
+ * is read one-handed, outdoors, in motion.
+ */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-surface-base bg-app text-ink font-sans antialiased;
+    margin: 0;
+    background-attachment: fixed;
+    /* Text selection on a duty device is a copy vector for incident data. */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Reference codes, ids and timestamps are data, not prose. */
+  .tabular {
+    @apply font-mono text-[0.8rem] tracking-tight tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.brand.DEFAULT');
+    outline-offset: 1px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-surface-line bg-surface-card shadow-card;
+  }
+
+  /* A panel that carries a heading and rows inside it, as on the dashboard brief. */
+  .panel {
+    @apply card overflow-hidden;
+  }
+
+  .panel-head {
+    @apply flex items-center justify-between gap-3 border-b border-surface-line px-4 py-3;
+  }
+
+  .field-input {
+    @apply w-full rounded-card border border-surface-line bg-surface-raised px-3 py-3 text-[0.95rem] text-ink
+      placeholder:text-ink-faint focus:border-brand focus:outline-none disabled:opacity-50;
+  }
+
+  .label {
+    @apply block text-[0.7rem] font-semibold uppercase tracking-[0.09em] text-ink-muted;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-card border px-4 py-3 text-[0.9rem] font-semibold
+      transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+    min-height: 48px;
+  }
+
+  .btn-primary {
+    @apply btn border-transparent bg-brand text-white shadow-tile active:bg-brand-strong;
+  }
+
+  .btn-secondary {
+    @apply btn border-surface-line-strong bg-surface-overlay text-ink active:border-brand active:text-brand;
+  }
+
+  .btn-danger {
+    @apply btn border-sev-critical/60 bg-sev-critical/15 text-sev-critical active:bg-sev-critical/25;
+  }
+
+  .btn-ghost {
+    @apply btn border-transparent bg-transparent text-ink-muted active:text-ink;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[0.7rem] font-semibold uppercase tracking-wider;
+  }
+
+  /* The filter row above the alert and incident queues: a chip that is also a control. */
+  .filter-chip {
+    @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border border-surface-line bg-surface-card px-4 py-2
+      text-[0.78rem] font-semibold text-ink-muted transition-colors active:border-brand;
+  }
+
+  .filter-chip-active {
+    @apply border-transparent bg-brand text-white shadow-tile;
+  }
+
+  .section-title {
+    @apply text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-ink-faint;
+  }
+
+  .divider {
+    @apply h-px w-full bg-surface-line;
+  }
+
+  /* Scrollable screen with room for the bottom tab bar and the notch. */
+  .screen {
+    @apply mx-auto w-full max-w-[560px] px-4 pb-[calc(var(--safe-bottom)+88px)] pt-[calc(var(--safe-top)+12px)];
+  }
+
+  /* Circular icon badge: the leading mark on a queue row, and the tick on a confirmation. */
+  .icon-badge {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full border;
+  }
+
+  .menu-row {
+    @apply flex w-full items-center gap-3 px-4 py-3.5 text-left text-[0.92rem] text-ink
+      active:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .avatar {
+    @apply flex items-center justify-center rounded-full border border-brand/50 bg-brand/15 font-semibold
+      uppercase text-brand;
+  }
+}
+
+/* Video evidence: keep the native player chrome, do not letterbox on dark. */
+video {
+  background: #000;
+  width: 100%;
+  border-radius: theme('borderRadius.card');
+}
+
+img {
+  background: theme('colors.surface.raised');
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

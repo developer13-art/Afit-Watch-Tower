@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>AFIT WATCH TOWER - Security operations console</title>
+  <meta name="description" content="AFIT WATCH TOWER console: camera registry, live monitoring, incident management and administration.">
+  <link rel="icon" href="/static/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/img/afit-emblem.png">
+  <link rel="stylesheet" href="/static/css/watchtower.css">
+  <script src="/static/js/app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-region">Skip to the console contents</a>
+
+  <!--
+    The server renders this page without data: the console reads everything from the JSON API
+    once it is loaded, so a session that expires mid-shift is detected on the next request
+    rather than at page render. What is written below is replaced by the application shell in
+    static/js/app.js.
+  -->
+  <div id="app">
+    <div class="boot">Starting WATCH TOWER console&hellip;</div>
+    <!--
+      CSP is script-src 'self', so nothing inline can watch for a failed boot; this sentence is
+      the fallback that needs no script at all. It is what an operator reads when the module graph
+      never arrived - the usual cause being that this page was opened while the server was between
+      stopping and starting. app.js replaces the whole contents of #app, so it disappears the
+      moment the console actually boots.
+    -->
+    <p class="note">
+      Still on this line after a few seconds? The console's scripts did not load, most often
+      because the server was not answering when this page was opened. Press Ctrl+F5 to reload.
+    </p>
+  </div>
+
+  <noscript>
+    <div class="boot-error">
+      <h2>JavaScript is required</h2>
+      <p>
+        The WATCH TOWER console displays camera health, live video relays and incident records
+        read from the server after sign-in, so it cannot present anything without scripting.
+      </p>
+      <p>
+        Use the browser supplied by the technical desk, or sign in to the read-only audit
+        workstation. Nothing here needs a plug-in, a font download or an external service:
+        the Content Security Policy in force allows only this origin.
+      </p>
+      <a class="btn primary" href="/login">Return to sign in</a>
+    </div>
+  </noscript>
+</body>
+</html>

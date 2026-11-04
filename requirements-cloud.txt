@@ -1,0 +1,36 @@
+# AFIT WATCH TOWER - the cloud notification gateway's dependencies.
+#
+# `requirements.txt` is the whole product, including the camera stack. A personnel API on a hosted
+# platform does not decode video, and installing OpenCV and NumPy to serve JSON costs a build
+# several hundred megabytes heavier for no reason - the kind of thing that turns a slow platform
+# into a timeout during the first deploy, when the last thing anybody needs is an unexplained
+# failure.
+#
+# This file is the import graph of `watchtower.cloud`, not a guess at it: the cloud app, CLI,
+# worker, delivery and dependency wiring were imported in a process where `cv2` and `numpy` raise
+# `ImportError` on sight (2026-11-03), and nothing reached for them. `python-multipart` and
+# `jinja2` are absent for the same reason - the cloud service answers JSON and renders no template,
+# so no request in it is a form post.
+#
+# `alembic` stays listed even though migrations are run from the monitoring host
+# (docs/deployment.md 5.2): `watchtower.cloud verify` reads the recorded revision through
+# `alembic.runtime`, which is the command that tells an operator whether this code and that
+# database agree.
+#
+# The monitoring host installs `requirements.txt`. Do not install this file there.
+
+fastapi>=0.162
+uvicorn>=0.54
+sqlalchemy>=2.1
+alembic>=1.20
+psycopg[binary]>=3.3
+cryptography>=50.0
+PyJWT>=2.15
+# Not in the import graph, and the one line here that a clean-machine deploy would otherwise miss:
+# `security/passwords.py` verifies Argon2id hashes through `argon2-cffi` and returns False for one
+# when the library is absent - a deliberate refusal to pretend, at passwords.py:65-68. The hashes in
+# the live `users` table were written by the monitoring host, which has the library, so a cloud
+# service without it boots, passes its health check, and answers `invalid_credentials` to every
+# person who is not on the legacy PBKDF2 hash. Measured 2026-11-03 in an environment built from the
+# list above alone: verify_password() -> False against a real Argon2id hash.
+argon2-cffi>=25.1

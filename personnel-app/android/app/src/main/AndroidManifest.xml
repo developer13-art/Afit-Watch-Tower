@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AFIT WATCH TOWER — personnel app manifest.
+
+  Changes from the Capacitor template, each for a stated reason:
+
+  1. POST_NOTIFICATIONS — required on Android 13+ (API 33) before a notification
+     can be shown at all. The push plugin does not declare it.
+  2. allowBackup="false" — this app holds a Keystore-protected refresh token and
+     renders incident records. Auto-Backup would copy app data to the user's
+     Google account; there is no reason to widen that surface.
+  3. Deep-link intent filters — contract §12: `watchtower://incidents/{id}` and
+     the HTTPS form `https://<cloud-host>/open/incidents/{id}`.
+  4. FCM default channel — a payload without `channel_id` still needs a channel
+     that exists, otherwise Android drops it silently.
+
+  REPLACE BEFORE RELEASE: the `<data android:host="…"/>` value under the HTTPS
+  filter must be your real cloud host, and the host must serve
+  /.well-known/assetlinks.json for autoVerify to succeed.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Contract §12: watchtower://incidents/{id} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="watchtower" />
+            </intent-filter>
+
+            <!--
+              Contract §12: the HTTPS form. `autoVerify` makes Android check
+              https://<host>/.well-known/assetlinks.json before routing the link
+              here; with a placeholder host the check fails and the browser keeps
+              the link, which is the safe direction for a failure.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="watchtower-api.example.invalid" />
+                <data android:pathPattern="/open/incidents/..*" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+
+        <!--
+          FCM defaults. `default_notification_channel_id` must match a channel the
+          app creates at runtime (src/push/pushRuntime.ts, ALL_CHANNELS).
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="watchtower-critical" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/colorPrimary" />
+
+    </application>
+</manifest>

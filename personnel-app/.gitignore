@@ -1,0 +1,32 @@
+node_modules
+dist
+dev-dist
+coverage
+npm-install.log
+npm-debug.log*
+yarn-error.log*
+
+# Local env — may hold the real API host. .env.example is the tracked template.
+.env
+.env.local
+.env.*.local
+
+# Firebase: the real config is a client-provided file, never committed.
+android/app/google-services.json
+ios/App/GoogleService-Info.plist
+
+# Android build output
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/.idea
+*.keystore
+*.jks
+*.p12
+
+# Editor
+.idea
+.vscode/*
+!.vscode/extensions.json
+.DS_Store

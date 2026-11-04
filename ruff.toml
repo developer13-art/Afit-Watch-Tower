@@ -1,0 +1,43 @@
+# Lint configuration for AFIT WATCH TOWER.
+#
+# Pinned in the repository so `ruff check` means the same thing on an AFIT engineering
+# workstation as on the deployment host. Without it ruff inherits whatever rules a
+# developer's user-level config enables, and the report becomes noise nobody reads.
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[lint]
+select = [
+  "E4", "E7", "E9", "F",   # pycodestyle errors and pyflakes: real defects
+  "B",                      # bugbear: shadowing, loop variable capture, unused args
+  "C4",                    # comprehension shape
+  "SIM",                   # simplifiable code
+  "UP",                    # modern syntax, so the codebase reads the same everywhere
+  "RUF",
+  "BLE",                   # a bare `except Exception` must carry a reason (sections 7, 10)
+  "S",                     # security: this application holds camera credentials
+]
+
+[lint.per-file-ignores]
+# Section 8.4 stores enum columns as VARCHAR with check constraints, so every state enum
+# deliberately mixes in `str`: `EnumColumn.process_bind_param` accepts either a member or the
+# raw string, and rows written by an older release must keep comparing equal. `enum.StrEnum`
+# changes str()/format() semantics, which is a migration decision, not a lint fix.
+# The personnel-mobile schema layer adds the same kind of VARCHAR-backed enums, so it follows
+# the rule its parent module already set.
+"src/watchtower/models.py" = ["UP042"]
+"src/watchtower/mobile/models.py" = ["UP042"]
+# FastAPI resolves dependencies by calling Depends()/require_permission() in the signature;
+# that is the framework idiom, not a mutable default argument. The cloud service is the same
+# framework with the same convention.
+"src/watchtower/api/**" = ["B008"]
+"src/watchtower/cloud/**" = ["B008"]
+# The supervision loop, the stream pump and the queue drain deliberately swallow a per-camera
+# fault so one dead decoder cannot stop the rest of the estate from being monitored. Each site
+# keeps a `# noqa: BLE001` with the reason; anything without one is reported.
+"tests/**" = ["S101", "S105", "S106", "S107", "B008", "SIM117", "BLE001", "RUF100"]
+"migrations/**" = ["E501", "F401", "UP", "B"]
+
+[lint.mccabe]
+max-complexity = 12

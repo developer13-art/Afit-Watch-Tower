@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>AFIT WATCH TOWER - Sign in</title>
+  <meta name="description" content="Sign in to the AFIT WATCH TOWER security camera monitoring and incident console.">
+  <link rel="icon" href="/static/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/img/afit-emblem.png">
+  <link rel="stylesheet" href="/static/css/watchtower.css">
+  <script src="/static/js/login.js" type="module"></script>
+</head>
+<body class="login-page">
+  <a class="skip-link" href="#login-form">Skip to the sign-in form</a>
+
+  <main class="login-card">
+    <div class="login-brand">
+      <img class="brand-mark" src="/static/img/afit-emblem.png" alt="AFIT WATCH TOWER emblem">
+      <div>
+        <h1>AFIT WATCH TOWER</h1>
+        <p>Air Force Institute of Technology, Kaduna &mdash; security operations console</p>
+      </div>
+    </div>
+
+    <p class="login-motto">From Passive Surveillance to Intelligent Security Awareness</p>
+
+    <div id="login-notice" class="login-notice" role="status" hidden></div>
+
+    <noscript>
+      <p class="login-error" role="alert">
+        JavaScript is required to sign in: credentials are exchanged with the server as JSON
+        and the session cookie is issued by that exchange. Enable scripting, or ask the
+        technical desk for the read-only audit workstation.
+      </p>
+    </noscript>
+
+    <form id="login-form" class="login-form" method="post" action="/api/auth/login" autocomplete="on">
+      <div class="form-field" data-field="username">
+        <label class="required" for="username">Username</label>
+        <input class="input" id="username" name="username" type="text"
+               autocomplete="username" spellcheck="false" required maxlength="64">
+        <span class="field-error" role="alert"></span>
+      </div>
+
+      <div class="form-field" data-field="password">
+        <label class="required" for="password">Password</label>
+        <div class="pw-row">
+          <input class="input" id="password" name="password" type="password"
+                 autocomplete="current-password" required maxlength="256">
+        </div>
+        <span class="hint">Accounts are locked for a few minutes after repeated failed attempts.</span>
+        <span class="field-error" role="alert"></span>
+      </div>
+
+      <button class="btn primary" id="login-submit" type="submit">Sign in</button>
+    </form>
+
+    <div id="login-error" class="login-error" role="alert" aria-live="assertive" hidden></div>
+
+    <p class="login-foot">
+      Sign-in attempts are recorded in the audit log together with the source address. Your
+      session ends automatically after the configured period and any undelivered alert stays
+      visible on the dashboard banner. Camera addresses and RTSP credentials are held by the
+      server and are never sent to this browser.
+    </p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,197 @@
+# AFIT WATCH TOWER - cloud notification gateway on Render.
+#
+# THIS FILE DESCRIBES A DEPLOYMENT THAT HAS NOT HAPPENED. Nothing in this repository has ever run
+# on Render; the three services below are written from the code's own start commands and from
+# Render's published Blueprint reference, and the first person to apply them will be the first to
+# see whether the platform accepts them. Publish nothing until AFIT has approved it.
+#
+# What it creates:
+#
+#   watchtower-cloud-api     web       personnel API only, no in-process worker
+#   watchtower-push-worker   worker    hands queued notifications to Firebase
+#   watchtower-escalation-worker worker queues a re-page for a stale critical incident
+#
+# Three services, not one, because two of the brief's rules only hold when they are separate:
+# a worker must not start inside every API instance (the API is the thing that might be scaled),
+# and a push sender that keeps erroring must be restartable without stopping the escalation sweep.
+#
+# The database is NOT declared here. It is the single Neon instance the monitoring host already
+# uses; a second database would split the estate in two, which the contract forbids.
+#
+# Secrets are never written in this file. `sync: false` means "the value is entered once in the
+# Render dashboard and this blueprint must not overwrite it"; `generateValue: true` means Render
+# invents a strong one. Anything AFIT has not chosen yet - the public hostname above all - is left
+# unset rather than guessed, so a deployment that forgot it fails loudly instead of pointing the
+# phones at a made-up domain.
+#
+# Three facts about Render's filesystem shaped the paths below, and each one breaks the deployment
+# if ignored:
+#
+#   * Secret FILES mount at /etc/secrets/<filename> and nowhere else. The path is not a free choice,
+#     so the key ring and the Firebase service-account live there. Blueprints cannot declare secret
+#     files at all: both are created in the dashboard, by hand, once.
+#   * A persistent disk belongs to exactly ONE service and cannot be shared. The ring must therefore
+#     NOT be on a disk - three disks would be three different rings, and a token sealed with ring A
+#     cannot be unsealed by ring B, which silently breaks every push after the first. One read-only
+#     secret file, mounted identically into all three services, is what makes the ring safe; the
+#     production code never writes the ring (only `watchtower.cli rotate-keys` does), so read-only
+#     is not a limitation here.
+#   * A service with a disk cannot run more than one instance. `numInstances: 1` on the API is not
+#     conservatism, it is a requirement of the layout, because the API is the only process that
+#     writes relayed evidence.
+
+services:
+  - type: web
+    name: watchtower-cloud-api
+    runtime: python
+    # `starter`, not `free`: a web service that scales to zero does not deliver pushes. The queue
+    # keeps growing, the monitoring host keeps forwarding into a cold start and officers conclude
+    # the app is broken. This is the most likely way this deployment fails quietly.
+    plan: starter
+    buildCommand: pip install -r requirements-cloud.txt
+    # No `--port`: the platform publishes its port as PORT and this service binds what it was
+    # given (cloud/cli.py `_resolve_port`). `--host 0.0.0.0` is deliberate and only appears here;
+    # the default stays loopback so a local run is never reachable from the network.
+    # `--trusted-proxy '*'` is the one line in this file with a documented cost - see
+    # docs/deployment.md 5.4, which explains what it buys (the HTTPS guarantee) and what it gives
+    # up (an unspoofable client address). Turning on the platform's Force HTTPS setting is part of
+    # making that trade safe, and it is a dashboard switch, not a blueprint field.
+    startCommand: python -m watchtower.cloud --log-level INFO serve --no-worker --host 0.0.0.0
+      --trusted-proxy '*'
+    # `/healthz`, not `/readyz`: that name belongs to the monitoring console. A health check
+    # pointed at a 404 makes a healthy service look like it is crashing.
+    healthCheckPath: /healthz
+    numInstances: 1
+    # The only disk in this blueprint, and it holds one thing: relayed evidence bytes written by the
+    # ingest routes and read back by the evidence retrieval routes. Without it a deploy deletes every
+    # frame the phones were about to open. It is mounted at the parent so a future path under
+    # /var/lib/watchtower stays on the disk.
+    disk:
+      name: watchtower-evidence
+      mountPath: /var/lib/watchtower
+      sizeGB: 1
+    envVars:
+      - fromGroup: watchtower-cloud
+
+  - type: worker
+    name: watchtower-push-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements-cloud.txt
+    startCommand: python -m watchtower.cloud --log-level INFO worker --jobs delivery
+    envVars:
+      - fromGroup: watchtower-cloud
+      # No disk on either worker. `cmd_worker` creates CLOUD_EVIDENCE_DIR on its way up
+      # (cloud/cli.py:171) but nothing in a worker ever writes an evidence file - ingest writes
+      # them and only the API serves them - so the workers point that name at the container's
+      # ordinary writable filesystem instead of the API's disk. A value set on the service beats
+      # the same key from the attached group; that is how one group serves three shapes.
+      - key: CLOUD_EVIDENCE_DIR
+        value: /tmp/watchtower-evidence
+      # Reading the ring is all this process needs, and the ring is a secret file, not a disk path:
+      # identical bytes in every service, so a token sealed by the API decrypts here.
+
+  - type: worker
+    name: watchtower-escalation-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements-cloud.txt
+    startCommand: python -m watchtower.cloud --log-level INFO worker --jobs escalation
+    envVars:
+      - fromGroup: watchtower-cloud
+      - key: CLOUD_EVIDENCE_DIR
+        value: /tmp/watchtower-evidence
+
+envVarGroups:
+  - name: watchtower-cloud
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # Not decoration, and the one line without which every service in this blueprint fails at
+      # startup: the project is a `src/` layout that is never pip-installed, so `python -m
+      # watchtower.cloud` raises `ModuleNotFoundError: No module named 'watchtower'` unless `src` is
+      # on the path. Proved on this machine on 2026-11-03 by running the command without it. Every
+      # local command in the README is preceded by `set PYTHONPATH=src` for the same reason, and a
+      # hosted process has nobody to type it. Render starts each service in the repository root, so
+      # the relative value is correct.
+      - key: PYTHONPATH
+        value: src
+      - key: CLOUD_ENVIRONMENT
+        value: production
+      - key: CLOUD_REQUIRE_HTTPS
+        value: "1"
+
+      # The shared Neon database, through its pooled endpoint. Set in the dashboard - this file
+      # must never carry the DSN.
+      - key: CLOUD_DATABASE_URL
+        sync: false
+
+      # Signs access tokens. 32 characters minimum; Render generating it is the easiest way to be
+      # sure nobody pasted a phrase.
+      - key: CLOUD_JWT_SECRET
+        generateValue: true
+
+      # The origin the phones are configured with, and the host every deep link is built against.
+      # Enter the hostname Render actually gave this service (or the custom domain), as
+      # https://<host>. Left unset on purpose: the real domain is AFIT's to choose.
+      - key: CLOUD_PUBLIC_BASE_URL
+        sync: false
+
+      # CORS, and the one entry here that a native-only pilot must NOT leave empty. The packaged
+      # Android app is a WebView making `fetch` calls, and with `androidScheme: 'https'`
+      # (personnel-app/capacitor.config.ts) its origin is `https://localhost` - a browser origin.
+      # A missing origin is not a warning: an unlisted Origin gets its preflight refused, so the
+      # app cannot sign anybody in. Measured against the running service on 2026-11-03 -
+      # `OPTIONS /api/v1/auth/login` with `Origin: https://localhost` -> 400, with a listed origin
+      # -> 200. Comma-separated. Add the web build's real https origin here too if you host one.
+      - key: CLOUD_ALLOWED_ORIGINS
+        value: https://localhost,http://localhost
+
+      # The ring that seals stored FCM tokens. Create it on the monitoring host, then upload it as
+      # a Render SECRET FILE named cloud.key - /etc/secrets is the only directory secret files
+      # mount into, and it is read-only, which is fine: production code reads the ring and never
+      # writes it. It must NOT be on the disk: a disk belongs to one service, so three disks would
+      # be three different rings and every token sealed before a given restart would stop decoding.
+      # In production the service refuses to mint a ring rather than quietly stranding the tokens
+      # already in the database. See docs/deployment.md 5.3.
+      - key: CLOUD_SECRET_KEY_PATH
+        value: /etc/secrets/cloud.key
+
+      # Relayed evidence bytes: written by the API's ingest routes, read by its retrieval routes, so
+      # this is the path on the API's persistent disk. Without the disk a deploy deletes every frame
+      # the phones were about to open. Both workers override this key to /tmp (see their envVars),
+      # because a worker only creates the directory and never touches a file in it.
+      - key: CLOUD_EVIDENCE_DIR
+        value: /var/lib/watchtower/evidence
+
+      # The monitoring host's id/secret pairs for signed ingest. One object, e.g.
+      # {"host-1":"<64 characters>"} - generate the pair with
+      # `python -m watchtower.cloud service-key` on the monitoring host.
+      - key: CLOUD_SERVICE_KEYS_JSON
+        sync: false
+
+      # How long a critical, open, unacknowledged incident waits before the escalation worker
+      # pages a wider audience.
+      - key: CLOUD_ESCALATE_AFTER_SECONDS
+        value: "180"
+
+      # Push. Both or neither: a project id with no service-account file is a worker that records
+      # every alert as undeliverable, and `verify` says so. The JSON is a Render SECRET FILE named
+      # firebase-service-account.json - secret files mount only under /etc/secrets, they are not
+      # environment variables, and they are never in Git. Neither worker nor API will start if this
+      # path is set and the file is absent, which is the guard, not a bug.
+      - key: CLOUD_FIREBASE_PROJECT_ID
+        sync: false
+      - key: CLOUD_FIREBASE_SERVICE_ACCOUNT_FILE
+        value: /etc/secrets/firebase-service-account.json
+
+      # Severities and event kinds that ignore a recipient's quiet-hours preference. Stated here
+      # rather than left to the default so the pilot's paging rules are visible in one file; a
+      # placeholder value is not inert - it becomes a whitelist matching nothing.
+      - key: CLOUD_FORCED_ALERTS
+        value: critical,incident.escalated
+
+      # NOT set here, on purpose: WATCHTOWER_DATABASE_URL and WATCHTOWER_JWT_SECRET belong to the
+      # monitoring host. Migrations read those, which is why `alembic upgrade` runs there and not
+      # on this platform (docs/deployment.md 5.2). Putting the camera host's signing secret on a
+      # public cloud service to save yourself one command is how a scope limit gets lost.
